@@ -1,0 +1,47 @@
+name: Mise à jour quotidienne
+
+on:
+  schedule:
+    - cron: "43 4 * * *"   # chaque jour vers 5h43 (heure d'hiver) — fichier Météo-France publié vers 4h
+  push:
+    branches: [main]
+  workflow_dispatch:       # bouton « Run workflow » pour lancer à la main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  construire-et-publier:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publication.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installer la bibliothèque de chiffrement
+        run: pip install cryptography
+      - name: Télécharger les données et construire l'appli
+        run: bash scripts/update.sh
+        env:
+          PV43_MDP: ${{ secrets.PV43_MDP }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: publication
+        uses: actions/deploy-pages@v4
+      - name: Garder la mise à jour active
+        # GitHub suspend les tâches planifiées après 60 jours sans activité : on la réactive à chaque passage
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/mise-a-jour.yml/enable" || true
+        env:
+          GH_TOKEN: ${{ github.token }}

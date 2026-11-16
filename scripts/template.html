@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Météo PV 43">
+<meta name="theme-color" content="#2e6b47">
+<title>Météo PV 43</title>
+<!--PWA_HEAD-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Plan : outil de terrain, une colonne au pouce ; vert prairie pour la base 0, ocre maïs pour la base 6, bleu pour la pluie */
+:root {
+  --bg: #f1f3ee;
+  --surface: #ffffff;
+  --ink: #1b2420;
+  --muted: #5d6a63;
+  --line: #dde2da;
+  --accent: #2e6b47;
+  --accent-soft: #e2efe6;
+  --warm: #a86a12;
+  --warm-soft: #f6ebd7;
+  --rain: #2a679c;
+  --rain-soft: #e1ecf6;
+  --alert: #b3412e;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111714; --surface: #19211d; --ink: #e7ece8; --muted: #9ba79f; --line: #2a3530;
+    --accent: #72c093; --accent-soft: #1f3528; --warm: #e2a94a; --warm-soft: #3a2c15;
+    --rain: #73ade0; --rain-soft: #172a3b; --alert: #ef8b77; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111714; --surface: #19211d; --ink: #e7ece8; --muted: #9ba79f; --line: #2a3530;
+  --accent: #72c093; --accent-soft: #1f3528; --warm: #e2a94a; --warm-soft: #3a2c15;
+  --rain: #73ade0; --rain-soft: #172a3b; --alert: #ef8b77; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.4 var(--body); -webkit-text-size-adjust: 100%; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--display); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: .01em; }
+
+/* Verrou */
+#lock { min-height: 100%; display: grid; place-items: center; padding: 24px 16px; }
+.lock-card { width: 100%; max-width: 360px; display: grid; gap: 16px; }
+.lock-card h1 { font-size: 34px; line-height: 1.05; }
+.lock-card p { margin: 0; color: var(--muted); }
+.field { display: grid; gap: 6px; }
+.field label { font-size: 14px; color: var(--muted); }
+.field input[type=password], .field input[type=text] { padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 18px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 15px; color: var(--muted); }
+.btn { padding: 14px; border: 0; border-radius: 10px; background: var(--accent); color: var(--surface); font-weight: 600; font-size: 17px; }
+.err { color: var(--alert); font-size: 15px; min-height: 1.2em; }
+.mark { display: flex; gap: 6px; align-items: center; font: 600 14px var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.mark i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); display: inline-block; }
+
+/* Application */
+#app { display: none; min-height: 100%; padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+header.top { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 12px 16px 10px; display: grid; gap: 8px; }
+.top-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.top h1 { font-size: 24px; }
+.asof { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 14px; color: var(--muted); }
+.asof input { border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; background: var(--surface); font-size: 15px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+main { padding: 12px 16px 24px; display: grid; gap: 14px; max-width: 720px; margin: 0 auto; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 14px; font-size: 15px; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 7px 14px; font-size: 15px; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.bar-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hint { font-size: 14px; color: var(--muted); margin: 0; }
+
+.list { display: grid; gap: 8px; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; text-align: left; width: 100%; position: relative; overflow: hidden; }
+.row .name { font-weight: 600; font-size: 17px; }
+.row .sub { font-size: 13px; color: var(--muted); }
+.row .val { font-size: 30px; font-weight: 700; line-height: 1; text-align: right; grid-row: span 2; align-self: center; }
+.row .val small { font-size: 16px; font-weight: 600; color: var(--muted); }
+.row .meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--muted); margin-top: 6px; }
+.row .meta b { color: var(--ink); font-weight: 600; }
+.track { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--line); margin-top: 8px; overflow: hidden; }
+.track span { display: block; height: 100%; border-radius: 3px; background: var(--c, var(--accent)); }
+.pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+.pill.warm { background: var(--warm-soft); color: var(--warm); }
+.pill.rain { background: var(--rain-soft); color: var(--rain); }
+.pill.dry0 { background: var(--warm-soft); color: var(--alert); }
+.pill.dry1 { background: var(--warm-soft); color: var(--warm); }
+.pill.dry2 { background: var(--accent-soft); color: var(--accent); }
+.pill.dry3 { background: var(--rain-soft); color: var(--rain); }
+.up { color: var(--accent); } .down { color: var(--alert); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+.card h2 { font-size: 20px; }
+.card h3 { font-size: 17px; }
+.dates { display: flex; gap: 10px; flex-wrap: wrap; }
+.dates .field input { padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+nav.tabs button { border: 0; background: none; padding: 10px 4px 12px; display: grid; justify-items: center; gap: 2px; font-size: 13px; color: var(--muted); }
+nav.tabs button svg { width: 24px; height: 24px; }
+nav.tabs button[aria-current="page"] { color: var(--accent); font-weight: 600; }
+
+/* Fiche station */
+#detail { position: fixed; inset: 0; z-index: 10; background: var(--bg); overflow-y: auto; display: none; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+#detail header { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; align-items: center; gap: 12px; z-index: 2; }
+#detail header button { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 6px 12px; font-size: 15px; }
+#detail header h2 { font-size: 22px; }
+.tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.tile { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 2px; background: var(--bg); }
+.tile .k { font-size: 13px; color: var(--muted); }
+.tile .v { font-size: 26px; font-weight: 700; line-height: 1.05; }
+.tile .s { font-size: 13px; color: var(--muted); }
+.next { border-left: 4px solid var(--accent); padding: 8px 12px; background: var(--accent-soft); border-radius: 0 8px 8px 0; font-size: 15px; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart text { fill: var(--muted); font: 12px var(--body); }
+.legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 3px solid var(--accent); vertical-align: middle; margin-right: 4px; }
+.legend i.prev { border-top: 2px dashed var(--muted); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+th { font-size: 13px; color: var(--muted); font-weight: 500; }
+
+.ref { display: grid; grid-template-columns: 74px 1fr; gap: 4px 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.ref:last-child { border-bottom: 0; }
+.ref .t { font-size: 22px; font-weight: 700; color: var(--accent); }
+.ref .t.warm { color: var(--warm); }
+.ref .who { grid-column: 2; font-size: 13px; color: var(--muted); }
+footer.src { font-size: 13px; color: var(--muted); padding: 0 16px 16px; max-width: 720px; margin: 0 auto; display: grid; gap: 6px; }
+@media (prefers-reduced-motion: no-preference) { .track span { transition: width .3s ease; } }
+</style>
+</head>
+<body>
+
+<section id="lock" aria-label="Accès">
+  <form class="lock-card" id="lockForm" autocomplete="on">
+    <div class="mark"><i></i>Équipe PV · Haute-Loire</div>
+    <h1>Sommes de températures et pluie des stations</h1>
+    <p>Accès réservé à l'équipe. Saisis le mot de passe qu'on t'a donné.</p>
+    <div class="field">
+      <label for="pw">Mot de passe</label>
+      <input type="password" id="pw" name="password" autocomplete="current-password" required>
+    </div>
+    <label class="check" for="remember"><input type="checkbox" id="remember" checked> Se souvenir sur ce téléphone</label>
+    <button class="btn" type="submit" id="unlockBtn">Ouvrir</button>
+    <div class="err" id="err" role="alert"></div>
+  </form>
+</section>
+
+<div id="app">
+  <header class="top">
+    <div class="top-row">
+      <h1>Météo PV 43</h1>
+      <button class="linkbtn" id="lockBtn" type="button">Verrouiller</button>
+    </div>
+    <div class="asof">
+      <label for="asof">Situation au</label>
+      <input type="date" id="asof">
+      <button class="linkbtn" id="latestBtn" type="button">Dernière donnée</button>
+      <span id="asofNote"></span>
+    </div>
+  </header>
+
+  <main id="view"></main>
+
+  <footer class="src">
+    <span id="srcLine"></span>
+    <span>Météo-France publie les données avec 2 jours de décalage environ.</span>
+  </footer>
+
+  <nav class="tabs" aria-label="Rubriques">
+    <button type="button" data-tab="sommes" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14.5V4a2 2 0 1 1 4 0v10.5a4 4 0 1 1-4 0Z"/><path d="M12 8v8"/></svg>
+      Sommes
+    </button>
+    <button type="button" data-tab="pluie">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/></svg>
+      Pluie
+    </button>
+    <button type="button" data-tab="reperes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 21V10"/><path d="M12 13c-4 0-6-3-6-7 4 0 6 3 6 7Z"/><path d="M12 10c0-4 2-7 6-7 0 4-2 7-6 7Z"/></svg>
+      Repères
+    </button>
+  </nav>
+</div>
+
+<section id="detail" aria-label="Fiche station"></section>
+
+<script>
+__CALC__
+</script>
+<script>
+const PAYLOAD = __PAYLOAD__;
+const STORE_KEY = "pv43-acces";
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+};
+const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+async function decrypt(password) {
+  const enc = new TextEncoder();
+  const base = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: b64(PAYLOAD.salt), iterations: PAYLOAD.iter, hash: "SHA-256" },
+    base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(PAYLOAD.iv) }, key, b64(PAYLOAD.ct));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = (v, d = 0) => v == null ? "–" : v.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const signed = (v, d = 0) => v == null ? "–" : (v >= 0 ? "+" : "−") + fmt(Math.abs(v), d);
+const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+const dLong = (s) => new Date(s + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+const dShort = (s) => new Date(s + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+
+let DATA, REP, state = { tab: "sommes", metric: "b0feb", group: "stations", rain: "ytd", from: null, to: null, date: null };
+try { Object.assign(state, JSON.parse(store.get("pv43-vue") || "{}")); } catch (e) {}
+state.date = null;
+const saveState = () => store.set("pv43-vue", JSON.stringify({ tab: state.tab, metric: state.metric, group: state.group, rain: state.rain }));
+
+/* ---------- Déverrouillage ---------- */
+async function unlock(pw, remember) {
+  const payload = await decrypt(pw);
+  DATA = payload.data; REP = payload.reperes;
+  if (remember) store.set(STORE_KEY, pw); else store.del(STORE_KEY);
+  $("#lock").style.display = "none";
+  $("#app").style.display = "block";
+  startApp();
+}
+$("#lockForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#err").textContent = "";
+  $("#unlockBtn").disabled = true;
+  try { await unlock($("#pw").value, $("#remember").checked); }
+  catch (err) { $("#err").textContent = "Mot de passe incorrect. Vérifie les majuscules et réessaie."; }
+  $("#unlockBtn").disabled = false;
+});
+$("#lockBtn").addEventListener("click", () => {
+  store.del(STORE_KEY);
+  location.reload();
+});
+(async () => {
+  const saved = store.get(STORE_KEY);
+  if (saved) { try { await unlock(saved, true); } catch (e) { store.del(STORE_KEY); } }
+})();
+
+/* ---------- Calculs d'affichage ---------- */
+const metricDef = (id) => Calc.METRICS.find((m) => m.id === id);
+const isB6 = (id) => id.startsWith("b6");
+const altTxt = (s) => s.alt && (s.official || s.alt !== 833 || s.code === "LE PUY-LOUDES") ? `${fmt(s.alt)} m` : "";
+const herbRefs = () => REP.herbe.filter((r) => r.seuil != null);
+
+function stage(value) {
+  if (value == null) return null;
+  const refs = herbRefs();
+  let last = null, next = null;
+  for (const r of refs) { if (value >= r.seuil) last = r; else { next = r; break; } }
+  return { last, next };
+}
+function nextText(value, gain7) {
+  const s = stage(value);
+  if (!s || !s.next) return null;
+  const left = s.next.seuil - value;
+  const rate = gain7 / 7;
+  const days = rate > 0.5 ? Math.ceil(left / rate) : null;
+  return { label: s.next.court, seuil: s.next.seuil, left, days };
+}
+
+function rowsFor(metric, date) {
+  const st = DATA.stations.map((s) => ({ s, ...Calc.metricSummary(s, metric, date) }));
+  if (state.group === "stations") return st.map((r) => ({ key: r.s.code, name: r.s.name, sub: altTxt(r.s), ...r }));
+  return DATA.zones.map((z) => {
+    const m = st.filter((r) => z.stations.includes(r.s.code));
+    const avg = (k) => m.some((r) => r[k] == null) ? null : m.reduce((a, r) => a + r[k], 0) / m.length;
+    return { key: z.id, zone: true, name: z.name, sub: `Moyenne de ${m.length} station${m.length > 1 ? "s" : ""}`, value: avg("value"), gain7: avg("gain7"), prev: avg("prev"), missing: 0 };
+  });
+}
+
+/* ---------- Vues ---------- */
+function viewSommes() {
+  const date = state.date;
+  const m = metricDef(state.metric);
+  const rows = rowsFor(state.metric, date);
+  const max = Math.max(1, ...rows.map((r) => r.value || 0));
+  const color = isB6(m.id) ? "var(--warm)" : "var(--accent)";
+  const chips = Calc.METRICS.map((x) => `<button class="chip" type="button" data-metric="${x.id}" aria-pressed="${x.id === m.id}">${x.short}</button>`).join("");
+  const list = rows.map((r) => {
+    let pill = "";
+    if (m.id === "b0feb" && r.value != null) {
+      const s = stage(r.value);
+      pill = s.last ? `<span class="pill">${esc(s.last.court)}</span>` : `<span class="pill">Avant ${herbRefs()[0].seuil}°</span>`;
+      const n = nextText(r.value, r.gain7);
+      if (n) pill += ` <span>${esc(n.label)} dans <b>${fmt(n.left)}°</b>${n.days ? ` · ≈ ${n.days} j` : ""}</span>`;
+      if (!s.next) pill = `<span class="pill">Tous les repères passés</span>`;
+    }
+    const diff = r.value != null && r.prev != null ? r.value - r.prev : null;
+    return `<button class="row" type="button" ${r.zone ? "" : `data-station="${esc(r.key)}"`} aria-label="${esc(r.name)}">
+      <span class="name">${esc(r.name)}</span>
+      <span class="val num">${r.value == null ? "<small>pas commencé</small>" : fmt(r.value) + "<small>°</small>"}</span>
+      <span class="sub">${esc(r.sub)}</span>
+      <span class="meta">
+        <span>7 j : <b class="num">${signed(r.gain7)}°</b></span>
+        <span>N-1 : <b class="num">${fmt(r.prev)}°</b>${diff == null ? "" : ` <span class="num ${diff >= 0 ? "up" : "down"}">(${signed(diff)})</span>`}</span>
+        ${r.missing ? `<span class="down">${r.missing} j sans donnée</span>` : ""}
+      </span>
+      ${pill ? `<span class="meta">${pill}</span>` : ""}
+      <span class="track" style="--c:${color}"><span style="width:${r.value ? (100 * r.value / max).toFixed(1) : 0}%"></span></span>
+    </button>`;
+  }).join("");
+  return `
+    <div class="chips" role="group" aria-label="Somme affichée">${chips}</div>
+    <div class="bar-row">
+      <p class="hint">${esc(m.label)} · ${esc(m.note)}</p>
+      <div class="seg" role="group" aria-label="Regroupement">
+        <button type="button" data-group="stations" aria-pressed="${state.group === "stations"}">Stations</button>
+        <button type="button" data-group="zones" aria-pressed="${state.group === "zones"}">Zones</button>
+      </div>
+    </div>
+    <div class="list">${list}</div>
+    ${state.group === "stations" ? `<p class="hint">Touche une station pour voir sa fiche complète.</p>` : `<p class="hint">Zones : moyenne des stations, comme dans le fichier de synthèse.</p>`}`;
+}
+
+function rainPeriod() {
+  const d = state.date;
+  if (state.rain === "7j") return [Calc.addDays(d, -6), d, "7 derniers jours"];
+  if (state.rain === "30j") return [Calc.addDays(d, -29), d, "30 derniers jours"];
+  if (state.rain === "custom") {
+    const f = state.from || d.slice(0, 8) + "01", t = state.to || d;
+    return [f, t, `Du ${dShort(f)} au ${dShort(t)}`];
+  }
+  return [d.slice(0, 4) + "-01-01", d, "Depuis le 1er janvier"];
+}
+function viewPluie() {
+  const [from, to, label] = rainPeriod();
+  const rows = DATA.stations.map((s) => ({
+    s, v: Calc.rain(s, from, to),
+    p: Calc.idx(s, Calc.shiftYear(from, -1)) >= 0 ? Calc.rain(s, Calc.shiftYear(from, -1), Calc.shiftYear(to, -1)) : null,
+  }));
+  const max = Math.max(1, ...rows.map((r) => r.v || 0));
+  const opts = [["ytd", "Depuis le 1er janv."], ["7j", "7 jours"], ["30j", "30 jours"], ["custom", "Entre deux dates"]];
+  return `
+    <div class="chips" role="group" aria-label="Période">${opts.map(([k, l]) => `<button class="chip" type="button" data-rain="${k}" aria-pressed="${state.rain === k}">${l}</button>`).join("")}</div>
+    ${state.rain === "custom" ? `<div class="dates">
+      <div class="field"><label for="rfrom">Du</label><input type="date" id="rfrom" value="${from}" min="${DATA.stations[0].start}" max="${DATA.asOf}"></div>
+      <div class="field"><label for="rto">Au</label><input type="date" id="rto" value="${to}" min="${DATA.stations[0].start}" max="${DATA.asOf}"></div>
+    </div>` : ""}
+    <p class="hint">${esc(label)} · cumul en mm</p>
+    <div class="list">${rows.map((r) => {
+      const diff = r.v != null && r.p != null ? r.v - r.p : null;
+      return `<button class="row" type="button" data-station="${esc(r.s.code)}" aria-label="${esc(r.s.name)}">
+        <span class="name">${esc(r.s.name)}</span>
+        <span class="val num">${fmt(r.v)}<small> mm</small></span>
+        <span class="sub">${altTxt(r.s)}</span>
+        <span class="meta"><span>N-1 même période : <b class="num">${fmt(r.p)} mm</b>${diff == null ? "" : ` <span class="num">(${signed(diff)})</span>`}</span></span>
+        <span class="track" style="--c:var(--rain)"><span style="width:${(100 * (r.v || 0) / max).toFixed(1)}%"></span></span>
+      </button>`;
+    }).join("")}</div>`;
+}
+
+function viewReperes() {
+  const date = state.date;
+  const vals = DATA.stations.map((s) => ({ s, v: Calc.metricAt(s, "b0feb", date) }));
+  const reached = (seuil) => vals.filter((x) => x.v && x.v.value >= seuil).map((x) => x.s.name);
+  const herbe = REP.herbe.map((r) => {
+    const who = r.seuil != null ? reached(r.seuil) : [];
+    const whoTxt = r.seuil == null ? "" : who.length === 0 ? "Aucune station pour l'instant" : who.length === vals.length ? "Toutes les stations" : `Atteint : ${who.join(", ")}`;
+    return `<div class="ref"><span class="t num">${esc(r.label)}</span><span>${esc(r.texte)}</span>${whoTxt ? `<span class="who">${esc(whoTxt)}</span>` : ""}</div>`;
+  }).join("");
+  const autres = REP.autres.map((r) => `<div class="ref"><span class="t num ${r.base6 ? "warm" : ""}">${esc(r.label)}</span><span>${esc(r.texte)}</span></div>`).join("");
+  return `
+    <div class="card"><h2>Prairies · base 0 depuis le 1er février</h2>${herbe}</div>
+    <div class="card"><h2>Autres repères</h2>${autres}</div>
+    <p class="hint">${esc(REP.source)}</p>`;
+}
+
+/* ---------- Fiche station ---------- */
+function chartSVG(s, metric, date) {
+  const year = +date.slice(0, 4);
+  const cur = Calc.series(s, metric, year, date);
+  const prevEnd = Calc.shiftYear(date, -1);
+  let prev = Calc.idx(s, `${year - 1}-01-01`) >= 0 ? Calc.series(s, metric, year - 1, `${year - 1}-12-31`) : [];
+  if (!cur.length) return `<p class="hint">Cette somme n'a pas encore commencé à cette date.</p>`;
+  const m = metricDef(metric);
+  const start = new Date(`${year}-${m.from}T12:00:00`);
+  const dayOf = (mmdd) => Math.round((new Date(`${year}-${mmdd}T12:00:00`) - start) / 864e5);
+  const W = 340, H = 200, L = 40, R = 10, T = 10, B = 24;
+  const endDay = Math.min(dayOf("12-31"), Math.max(dayOf(date.slice(5)) + 45, 30));
+  const xMax = Math.max(endDay, 1);
+  const prevAll = prev; prev = prev.filter((p) => dayOf(p[0]) <= xMax);
+  const yMaxRaw = Math.max(...cur.map((p) => p[1]), ...(prev.length ? prev.map((p) => p[1]) : [0]));
+  const step = yMaxRaw > 3000 ? 1000 : yMaxRaw > 1200 ? 500 : yMaxRaw > 400 ? 200 : 100;
+  const yMax = Math.ceil(yMaxRaw / step) * step || step;
+  const X = (d) => L + (W - L - R) * d / xMax, Y = (v) => T + (H - T - B) * (1 - v / yMax);
+  const path = (pts) => pts.map((p, i) => `${i ? "L" : "M"}${X(dayOf(p[0])).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+  let g = "";
+  for (let v = 0; v <= yMax; v += step) g += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${fmt(v)}</text>`;
+  for (let mo = 1; mo <= 12; mo++) {
+    const mmdd = `${String(mo).padStart(2, "0")}-01`, d = dayOf(mmdd);
+    if (d < 0 || d > xMax) continue;
+    g += `<text x="${X(d)}" y="${H - 6}" text-anchor="middle">${MONTHS[mo - 1].slice(0, 3)}</text>`;
+  }
+  if (metric === "b0feb") for (const r of herbRefs()) if (r.seuil <= yMax) g += `<line x1="${L}" x2="${W - R}" y1="${Y(r.seuil)}" y2="${Y(r.seuil)}" stroke="var(--accent)" stroke-opacity=".35" stroke-dasharray="2 4"/>`;
+  const color = isB6(metric) ? "var(--warm)" : "var(--accent)";
+  const last = cur[cur.length - 1];
+  const prevCut = prev.filter((p) => p[0] <= prevEnd.slice(5));
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumul ${esc(m.label)} ${year} comparé à ${year - 1}">
+    ${g}
+    ${prev.length ? `<path d="${path(prev)}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3" opacity=".7"/>` : ""}
+    <path d="${path(cur)}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="${X(dayOf(last[0]))}" cy="${Y(last[1])}" r="4" fill="${color}"/>
+  </svg>
+  <div class="legend"><span><i style="border-color:${color}"></i>${year} : ${fmt(last[1])}°</span>${prev.length ? `<span><i class="prev"></i>${year - 1} à la même date : ${fmt(prevCut.length ? prevCut[prevCut.length - 1][1] : null)}°</span>` : ""}</div>`;
+}
+
+function openDetail(code, push = true) {
+  const s = DATA.stations.find((x) => x.code === code);
+  if (!s) return;
+  const date = state.date, year = +date.slice(0, 4);
+  const tiles = Calc.METRICS.map((m) => {
+    const r = Calc.metricSummary(s, m.id, date);
+    return `<div class="tile"><span class="k">${esc(m.short)}</span><span class="v num">${r.value == null ? "–" : fmt(r.value) + "°"}</span><span class="s">${r.value == null ? `Démarre le ${m.from.slice(3)}/${m.from.slice(0, 2)}` : `7 j ${signed(r.gain7)}° · N-1 ${fmt(r.prev)}°`}</span></div>`;
+  }).join("");
+  const b0 = Calc.metricSummary(s, "b0feb", date);
+  const n = b0.value != null ? nextText(b0.value, b0.gain7) : null;
+  const days = [];
+  for (let k = 0; k < 10; k++) {
+    const d = Calc.addDays(date, -k), i = Calc.idx(s, d);
+    if (i < 0) break;
+    days.push(`<tr><td>${dShort(d)}</td><td class="num">${fmt(s.tn[i], 1)}</td><td class="num">${fmt(s.tx[i], 1)}</td><td class="num">${fmt(Calc.mean(s, i), 1)}</td><td class="num">${fmt(s.rr[i], 1)}</td></tr>`);
+  }
+  const classes = ["Très sec", "Sec", "Normal", "Humide"];
+  const mon = Calc.monthly(s, year, date).map((m) => `<tr><td>${MONTHS[m.month - 1]}${m.partial ? "*" : ""}</td><td class="num">${fmt(m.rain)}</td><td class="num">${fmt(m.etp)}</td><td class="num">${fmt(m.tmean, 1)}</td><td>${m.cls == null ? "" : `<span class="pill dry${m.cls}">${classes[m.cls]}</span>`}</td></tr>`).join("");
+  const chartMetric = state.detailMetric || state.metric;
+  $("#detail").innerHTML = `
+    <header><button type="button" id="back">‹ Retour</button><div><h2>${esc(s.name)}</h2><span class="hint">${altTxt(s) ? altTxt(s) + " · " : ""}au ${dLong(date)}</span></div></header>
+    <main>
+      ${n ? `<div class="next">${esc(n.label)} (${fmt(n.seuil)}° base 0) dans <b class="num">${fmt(n.left)}°</b>${n.days ? `, soit environ <b>${n.days} jours</b> au rythme de la dernière semaine` : ""}.</div>` : ""}
+      <div class="card"><h2>Sommes de températures</h2><div class="tiles">${tiles}</div></div>
+      <div class="card chart">
+        <h2>Évolution</h2>
+        <div class="chips" role="group" aria-label="Courbe affichée">${Calc.METRICS.map((m) => `<button class="chip" type="button" data-dmetric="${m.id}" aria-pressed="${m.id === chartMetric}">${m.short}</button>`).join("")}</div>
+        ${chartSVG(s, chartMetric, date)}
+      </div>
+      <div class="card"><h2>Derniers jours</h2><div class="tablewrap"><table>
+        <thead><tr><th>Jour</th><th>T mini</th><th>T maxi</th><th>T moy.</th><th>Pluie mm</th></tr></thead><tbody>${days.join("")}</tbody></table></div></div>
+      <div class="card"><h2>Bilan mensuel ${year}</h2><div class="tablewrap"><table>
+        <thead><tr><th>Mois</th><th>Pluie mm</th><th>ETP mm</th><th>T moy.</th><th>Pluie / ETP</th></tr></thead><tbody>${mon}</tbody></table></div>
+        <p class="hint">ETP estimée selon la formule AP3C. * mois en cours. Très sec : pluie &lt; 0,33 × ETP · Sec : &lt; 0,67 · Normal : &lt; 1 · Humide : au-delà.</p></div>
+    </main>`;
+  $("#detail").style.display = "block";
+  $("#detail").scrollTop = 0;
+  document.body.style.overflow = "hidden";
+  $("#back").addEventListener("click", () => closeDetail());
+  $("#detail").querySelectorAll("[data-dmetric]").forEach((b) => b.addEventListener("click", () => {
+    state.detailMetric = b.dataset.dmetric;
+    const top = $("#detail").scrollTop;
+    openDetail(code, false);
+    $("#detail").scrollTop = top;
+  }));
+  state.openStation = code;
+  if (push) try { history.pushState({ d: code }, ""); } catch (e) {}
+}
+function closeDetail(fromPop) {
+  $("#detail").style.display = "none";
+  document.body.style.overflow = "";
+  state.openStation = null; state.detailMetric = null;
+  if (!fromPop) try { history.back(); } catch (e) {}
+}
+window.addEventListener("popstate", () => { if (state.openStation) closeDetail(true); });
+
+/* ---------- Rendu ---------- */
+function render() {
+  const v = $("#view");
+  v.innerHTML = state.tab === "pluie" ? viewPluie() : state.tab === "reperes" ? viewReperes() : viewSommes();
+  document.querySelectorAll("nav.tabs button").forEach((b) => {
+    if (b.dataset.tab === state.tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
+  v.querySelectorAll("[data-metric]").forEach((b) => b.addEventListener("click", () => { state.metric = b.dataset.metric; saveState(); render(); }));
+  v.querySelectorAll("[data-group]").forEach((b) => b.addEventListener("click", () => { state.group = b.dataset.group; saveState(); render(); }));
+  v.querySelectorAll("[data-rain]").forEach((b) => b.addEventListener("click", () => { state.rain = b.dataset.rain; saveState(); render(); }));
+  v.querySelectorAll("[data-station]").forEach((b) => b.addEventListener("click", () => openDetail(b.dataset.station)));
+  const rf = $("#rfrom"), rt = $("#rto");
+  if (rf) rf.addEventListener("change", () => { state.from = rf.value; render(); });
+  if (rt) rt.addEventListener("change", () => { state.to = rt.value; render(); });
+  $("#asofNote").textContent = state.date === DATA.asOf ? "" : "(date passée)";
+}
+
+function startApp() {
+  state.date = DATA.asOf;
+  const a = $("#asof");
+  a.value = DATA.asOf; a.min = DATA.stations[0].start; a.max = DATA.asOf;
+  a.addEventListener("change", () => { if (a.value) { state.date = a.value > DATA.asOf ? DATA.asOf : a.value; render(); } });
+  $("#latestBtn").addEventListener("click", () => { state.date = DATA.asOf; a.value = DATA.asOf; render(); });
+  $("#srcLine").textContent = `Données Météo-France jusqu'au ${dLong(DATA.asOf)}. Mise à jour de la page : ${new Date(DATA.builtAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}.`;
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => { state.tab = b.dataset.tab; saveState(); render(); window.scrollTo(0, 0); }));
+  render();
+}
+</script>
+<!--PWA_BODY-->
+</body>
+</html>
