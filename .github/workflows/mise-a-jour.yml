@@ -2,7 +2,9 @@ name: Mise à jour quotidienne
 
 on:
   schedule:
-    - cron: "43 4 * * *"   # chaque jour vers 5h43 (heure d'hiver) — fichier Météo-France publié vers 4h
+    # Plusieurs passages par jour (heures UTC) : Météo-France publie son fichier entre 4h et 9h environ, parfois plus tard.
+    # Heure de Paris en hiver : 7h43, 9h43, 12h43, 15h43, 19h43.
+    - cron: "43 6,8,11,14,18 * * *"
   push:
     branches: [main]
   workflow_dispatch:       # bouton « Run workflow » pour lancer à la main
